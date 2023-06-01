@@ -1,4 +1,4 @@
-package holiday
+package api
 
 import (
 	"encoding/json"

@@ -82,17 +82,10 @@ func resultHandler(w http.ResponseWriter, dateDetail []DateDetail, verbose Verbo
 
 func Handler(w http.ResponseWriter, r *http.Request) {
 	verbose := stringToVerboseLevel(r.URL.Query().Get("verbose"))
-	// date := r.URL.RequestURI()
 	date := r.URL.Query().Get("date")
 
-	// if len(uri) != len("/api/holiday/") {
-	// 	errHandler(w, fmt.Errorf("无效的日期"), verbose)
-	// 	return
-	// }
-
-	// date := uri[len("/api/holiday/"):]
 	parsedDate, err := time.Parse("2006", date)
-	if err == nil {
+	if err != nil {
 		dateDetail, err := judgeYear(parsedDate)
 		if err != nil {
 			errHandler(w, err, verbose)
@@ -114,17 +107,16 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parsedDate, err = time.Parse("2006-01-02", date)
-	if err == nil {
-		dateDetail, err := judgeDate(parsedDate)
-		if err != nil {
-			errHandler(w, err, verbose)
-			return
-		}
-		resultHandler(w, dateDetail, verbose)
-		return
+	if err != nil {
+		parsedDate = time.Now()
 	}
 
-	errHandler(w, fmt.Errorf("无效的日期"), verbose)
+	dateDetail, err := judgeDate(parsedDate)
+	if err != nil {
+		errHandler(w, err, verbose)
+		return
+	}
+	resultHandler(w, dateDetail, verbose)
 }
 
 func judgeYear(date time.Time) ([]DateDetail, error) {

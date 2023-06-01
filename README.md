@@ -10,6 +10,9 @@
 
 注意：vercel默认域名在中国大陆可能无法正常访问，建议绑定自己的域名。
 
+示例域名及请求（不保证可用性）：https://api.gointo.icu/api/holiday?date=2023-05-01
+
+
 ## 接口文档
 
 URI: `/api/holiday`

@@ -85,7 +85,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	date := r.URL.Query().Get("date")
 
 	parsedDate, err := time.Parse("2006", date)
-	if err != nil {
+	if err == nil {
 		dateDetail, err := judgeYear(parsedDate)
 		if err != nil {
 			errHandler(w, err, verbose)

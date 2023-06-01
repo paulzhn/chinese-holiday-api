@@ -30,7 +30,7 @@ URI: `/api/holiday`
     - 3：法定节假日前补班
     - 4：法定节假日后补班
   - 2：以 json 格式返回
-- `date`：日期，格式可为`yyyy-MM-dd`、`yyyy-MM`、`yyyy`，若是后两种，只可按json格式返回
+- `date`：日期，格式可为`yyyy-MM-dd`、`yyyy-MM`、`yyyy`，若是后两种，只可按json格式返回。如果传入的日期解析失败，默认返回当天的信息。
 
 
 json结构：

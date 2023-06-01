@@ -3,9 +3,10 @@ package holiday
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,7 +18,7 @@ var (
 	// level 2 key: month
 	// level 3 key: day
 	// level 3 value: DateDetail
-	dayOffMap = map[string]map[string]map[string]DateDetail{}
+	dayOffMap = map[int]map[int]map[int]DateDetail{}
 	mu        sync.Mutex
 )
 
@@ -81,14 +82,15 @@ func resultHandler(w http.ResponseWriter, dateDetail []DateDetail, verbose Verbo
 
 func Handler(w http.ResponseWriter, r *http.Request) {
 	verbose := stringToVerboseLevel(r.URL.Query().Get("verbose"))
-	uri := r.URL.RequestURI()
+	// date := r.URL.RequestURI()
+	date := r.URL.Query().Get("date")
 
-	if len(uri) != len("/api/holiday/") {
-		errHandler(w, fmt.Errorf("无效的日期"), verbose)
-		return
-	}
+	// if len(uri) != len("/api/holiday/") {
+	// 	errHandler(w, fmt.Errorf("无效的日期"), verbose)
+	// 	return
+	// }
 
-	date := uri[len("/api/holiday/"):]
+	// date := uri[len("/api/holiday/"):]
 	parsedDate, err := time.Parse("2006", date)
 	if err == nil {
 		dateDetail, err := judgeYear(parsedDate)
@@ -110,7 +112,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		resultHandler(w, dateDetail, verbose)
 		return
 	}
-	
+
 	parsedDate, err = time.Parse("2006-01-02", date)
 	if err == nil {
 		dateDetail, err := judgeDate(parsedDate)
@@ -121,7 +123,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		resultHandler(w, dateDetail, verbose)
 		return
 	}
-	
+
 	errHandler(w, fmt.Errorf("无效的日期"), verbose)
 }
 
@@ -138,8 +140,8 @@ func judgeYear(date time.Time) ([]DateDetail, error) {
 }
 
 func judgeMonth(date time.Time) ([]DateDetail, error) {
-	year := fmt.Sprint(date.Year())
-	month := fmt.Sprint(date.Month())
+	year := date.Year()
+	month := int(date.Month())
 	yearMap := dayOffMap[year]
 	if yearMap == nil {
 		errMsg := fmt.Sprintf("无法获取%v年的数据", year)
@@ -159,16 +161,16 @@ func judgeMonth(date time.Time) ([]DateDetail, error) {
 }
 
 func judgeDate(parsedDate time.Time) ([]DateDetail, error) {
-	year := fmt.Sprint(parsedDate.Year())
-	month := fmt.Sprint(parsedDate.Month())
-	day := fmt.Sprint(parsedDate.Day())
+	year := parsedDate.Year()
+	month := parsedDate.Month()
+	day := parsedDate.Day()
 
 	monthMap, err := getMonthMap(year)
 	if err != nil {
 		return nil, err
 	}
 
-	dayMap, ok := monthMap[month]
+	dayMap, ok := monthMap[int(month)]
 	if !ok {
 		return []DateDetail{
 			{
@@ -200,21 +202,26 @@ func judgeWorkDayOrOff(d time.Time) DateTypeEnum {
 	}
 }
 
-func getMonthMap(year string) (map[string]map[string]DateDetail, error) {
+func downloadJsonFile(year int) ([]byte, error) {
+	// https://github.com/NateScarlet/holiday-cn
+	url := fmt.Sprintf("https://raw.githubusercontent.com/NateScarlet/holiday-cn/master/%d.json", year)
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	content, err := io.ReadAll(resp.Body)
+	return content, err
+}
+
+func getMonthMap(year int) (map[int]map[int]DateDetail, error) {
 	// load from json
 	mu.Lock()
 	defer mu.Unlock()
 	if s, ok := dayOffMap[year]; ok {
 		return s, nil
 	}
-	filePath := fmt.Sprintf("../../holiday-cn/%v.json", year)
-	if _, err := os.Stat(filePath); err != nil {
-		log.Println(err)
-		err = fmt.Errorf("无效的日期")
-		return nil, err
-	}
-
-	content, err := os.ReadFile(filePath)
+	content, err := downloadJsonFile(year)
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -226,10 +233,6 @@ func getMonthMap(year string) (map[string]map[string]DateDetail, error) {
 		return nil, err
 	}
 
-	// 当为false的时候过来查
-	// 不存在 -> 前
-	// 存在，false -> 前
-	// 存在，true -> 后
 	holidayLastSituation := map[string]bool{}
 
 	for _, v := range originJson.Days {
@@ -240,16 +243,16 @@ func getMonthMap(year string) (map[string]map[string]DateDetail, error) {
 			return nil, err
 		}
 
-		month := dateComponentArr[1]
-		day := dateComponentArr[2]
+		month, _ := strconv.Atoi(dateComponentArr[1])
+		day, _ := strconv.Atoi(dateComponentArr[2])
 
 		if dayOffMap[year] == nil {
-			dayOffMap[year] = map[string]map[string]DateDetail{}
+			dayOffMap[year] = map[int]map[int]DateDetail{}
 		}
 		monthDayMap := dayOffMap[year]
 
 		if monthDayMap[month] == nil {
-			monthDayMap[month] = map[string]DateDetail{}
+			monthDayMap[month] = map[int]DateDetail{}
 		}
 		dayMap := monthDayMap[month]
 
@@ -265,10 +268,11 @@ func getMonthMap(year string) (map[string]map[string]DateDetail, error) {
 			} else {
 				dateType = WorkDayAfterHoliday
 			}
-			holidayLastSituation[v.Name] = v.IsOffDay
+
 		} else {
 			dateType = Holiday
 		}
+		holidayLastSituation[v.Name] = v.IsOffDay
 
 		dateDetail := DateDetail{
 			Date:     v.Date,
@@ -280,3 +284,43 @@ func getMonthMap(year string) (map[string]map[string]DateDetail, error) {
 
 	return dayOffMap[year], nil
 }
+
+type OriginJson struct {
+	Year   int      `json:"year"`
+	Papers []string `json:"papers"`
+	Days   []struct {
+		Name     string `json:"name"`
+		Date     string `json:"date"`
+		IsOffDay bool   `json:"isOffDay"`
+	} `json:"days"`
+}
+
+type DateTypeEnum int
+
+const (
+	PlainWorkDay DateTypeEnum = iota
+	PlainOffDay
+	Holiday
+	WorkDayBeforeHoliday
+	WorkDayAfterHoliday
+)
+
+type DateDetail struct {
+	Date     string       `json:"date"`
+	Name     string       `json:"name"`
+	DateType DateTypeEnum `json:"type"`
+}
+
+type ReturnJson struct {
+	Code    int          `json:"code"`
+	Message string       `json:"message"`
+	Data    []DateDetail `json:"data"`
+}
+
+type VerboseLevel int
+
+const (
+	VerboseLevelLow VerboseLevel = iota
+	VerboseLevelMedium
+	VerboseLevelHigh
+)

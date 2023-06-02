@@ -136,11 +136,19 @@ func judgeMonth(date time.Time) ([]DateDetail, error) {
 	year := date.Year()
 	month := int(date.Month())
 	yearMap := dayOffMap[year]
+	var err error
 	if yearMap == nil {
+		_, err = getMonthMap(year)
+		yearMap = dayOffMap[year]
+	}
+	if yearMap == nil || err != nil {
 		errMsg := fmt.Sprintf("无法获取%v年的数据", year)
 		log.Println(errMsg)
+		log.Println(err)
 		return nil, fmt.Errorf(errMsg)
 	}
+	
+
 	monthMap := yearMap[month]
 	res := []DateDetail{}
 	if monthMap == nil {
@@ -203,6 +211,8 @@ func downloadJsonFile(year int) ([]byte, error) {
 	url := fmt.Sprintf("https://raw.githubusercontent.com/NateScarlet/holiday-cn/master/%d.json", year)
 	resp, err := http.Get(url)
 	if err != nil {
+		log.Println(err)
+		err = fmt.Errorf("所请求的年份数据不存在")
 		return nil, err
 	}
 	defer resp.Body.Close()

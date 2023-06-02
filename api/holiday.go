@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -149,6 +150,9 @@ func judgeMonth(date time.Time) ([]DateDetail, error) {
 	for _, v := range monthMap {
 		res = append(res, v)
 	}
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].Date < res[j].Date
+	})
 	return res, nil
 }
 
